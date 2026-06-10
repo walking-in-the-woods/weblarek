@@ -98,3 +98,91 @@ Presenter - презентер содержит основную логику п
 `emit<T extends object>(event: string, data?: T): void` - инициализация события. При вызове события в метод передается название события и объект с данными, который будет использован как аргумент для вызова обработчика.  
 `trigger<T extends object>(event: string, context?: Partial<T>): (data: T) => void` - возвращает функцию, при вызове которой инициализируется требуемое в параметрах событие с передачей в него данных из второго параметра.
 
+## Данные
+
+В приложении используются следующие интерфейсы данных:
+
+- `IProduct` – описание товара:
+  - `id: string`
+  - `description: string`
+  - `image: string`
+  - `title: string`
+  - `category: string`
+  - `price: number | null`
+- `IBuyer` – данные покупателя:
+  - `payment: 'card' | 'cash'`
+  - `email: string`
+  - `phone: string`
+  - `address: string`
+- `IOrder` – данные, отправляемые на сервер:
+  - `payment, email, phone, address, items: string[], total: number`
+- `IOrderResult` – ответ сервера:
+  - `id: string, total: number`
+- `IProductsResponse` – ответ сервера со списком товаров:
+  - `total: number, items: IProduct[]`
+
+## Модели данных
+
+Модели хранят данные и предоставляют методы для их изменения. Они не зависят от отображения.
+
+### Класс `ProductsModel` (каталог)
+
+**Назначение:** хранение списка всех товаров и выбранного для детального просмотра товара.
+
+**Поля:**
+- `_items: IProduct[]` – массив товаров
+- `_selectedProduct: IProduct | null` – выбранный товар
+
+**Методы:**
+- `setItems(items: IProduct[]): void` – сохранить массив товаров
+- `getItems(): IProduct[]` – получить массив товаров
+- `getItemById(id: string): IProduct | undefined` – найти товар по id
+- `setSelectedProduct(product: IProduct | null): void` – установить выбранный товар
+- `getSelectedProduct(): IProduct | null` – получить выбранный товар
+
+### Класс `BasketModel` (корзина)
+
+**Назначение:** хранение товаров, выбранных пользователем.
+
+**Поля:**
+- `_items: IProduct[]` – массив товаров в корзине
+
+**Методы:**
+- `getItems(): IProduct[]`
+- `addItem(product: IProduct): void`
+- `removeItem(productId: string): void`
+- `clear(): void`
+- `getTotalPrice(): number`
+- `getCount(): number`
+- `hasItem(productId: string): boolean`
+
+### Класс `OrderModel` (покупатель)
+
+**Назначение:** хранение данных пользователя, вводимых при оформлении заказа.
+
+**Поля:**
+- `_payment: TPayment | null`
+- `_address: string`
+- `_email: string`
+- `_phone: string`
+
+**Методы:**
+- `setField(field: keyof IBuyer, value: string): void` – установить значение конкретного поля
+- `getData(): IBuyer` – получить все данные
+- `clear(): void`
+- `validate(): Partial<Record<keyof IBuyer, string>>` – проверка заполненности полей, возвращает объект с ошибками
+
+## Слой коммуникации
+
+### Класс `WebLarekAPI`
+
+**Назначение:** инкапсулирует все запросы к серверу, используя композицию с базовым классом `Api`.
+
+**Конструктор:**
+- `constructor(api: Api)` – принимает экземпляр `Api`, настроенный на базовый URL сервера.
+
+**Методы:**
+- `getProducts(): Promise<IProductsResponse>` – GET запрос на `/product`, возвращает список товаров.
+- `postOrder(order: IOrder): Promise<IOrderResult>` – POST запрос на `/order`, отправляет заказ и возвращает подтверждение.
+
+# Ссылка на проект: https://github.com/walking-in-the-woods/weblarek
