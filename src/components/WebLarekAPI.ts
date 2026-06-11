@@ -1,12 +1,12 @@
-import { Api } from './base/Api';
+import { IApi } from '../types';
 import { IOrder, IOrderResult, IProductsResponse } from '../types';
 
 /**
  * Класс для взаимодействия с сервером интернет-магазина.
- * Использует композицию с базовым Api.
+ * Использует композицию с любым объектом, реализующим интерфейс IApi.
  */
 export class WebLarekAPI {
-  constructor(private _api: Api) {}
+  constructor(private _api: IApi) {}
 
   // Получить список товаров (GET /product)
   getProducts(): Promise<IProductsResponse> {

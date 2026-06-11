@@ -47,3 +47,6 @@ export interface IProductsResponse {
   total: number;
   items: IProduct[];
 }
+
+// Тип для ошибок валидации модели заказа
+export type TValidationErrors = Partial<Record<keyof IBuyer, string>>;

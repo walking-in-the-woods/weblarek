@@ -1,4 +1,4 @@
-import { IBuyer, TPayment } from '../../types';
+import { IBuyer, TPayment, TValidationErrors } from '../../types';
 
 /**
  * Модель данных покупателя (заказа).
@@ -14,7 +14,12 @@ export class OrderModel {
   // Установить значение конкретного поля
   setField(field: keyof IBuyer, value: string): void {
     if (field === 'payment') {
-      this._payment = value as TPayment;
+      // Проверяем, что значение допустимо
+      if (value === 'card' || value === 'cash') {
+        this._payment = value;
+      } else {
+        console.warn(`Invalid payment value: ${value}`);
+      }
     } else if (field === 'address') {
       this._address = value;
     } else if (field === 'email') {
@@ -24,10 +29,10 @@ export class OrderModel {
     }
   }
 
-  // Получить все данные покупателя
-  getData(): IBuyer {
+  // Получить все данные покупателя (частично, т.к. payment может быть не выбран)
+  getData(): Partial<IBuyer> {
     return {
-      payment: this._payment as TPayment,
+      payment: this._payment ?? undefined,
       address: this._address,
       email: this._email,
       phone: this._phone,
@@ -47,8 +52,8 @@ export class OrderModel {
    * Возвращает объект с ошибками для полей, которые не прошли проверку.
    * Поле считается невалидным, если оно пустое (или payment === null).
    */
-  validate(): Partial<Record<keyof IBuyer, string>> {
-    const errors: Partial<Record<keyof IBuyer, string>> = {};
+  validate(): TValidationErrors {
+    const errors: TValidationErrors = {};
 
     if (!this._payment) {
       errors.payment = 'Не выбран способ оплаты';
