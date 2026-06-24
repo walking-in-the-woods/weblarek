@@ -1,15 +1,6 @@
 /**
  * Точка входа приложения Web-ларёк.
- *
- * Реализует слой презентера: связывает модели данных, компоненты представления
- * и API через брокер событий EventEmitter.
- *
- * Основные сценарии:
- * - загрузка и отображение каталога товаров;
- * - предпросмотр товара в модальном окне;
- * - управление корзиной (добавление/удаление);
- * - оформление заказа (два шага, валидация);
- * - отправка заказа на сервер и показ результата.
+ * Реализует слой презентера: связывает модели, представления и API.
  */
 
 import './scss/styles.scss';
@@ -41,44 +32,32 @@ import { Success } from './components/view/Success';
 import { IBuyer } from './types';
 import { API_URL, CDN_URL } from './utils/constants';
 import { cloneTemplate, ensureElement } from './utils/utils';
+import { apiProducts } from './utils/data';
 
 // ============================================================================
-// Инициализация брокера событий и API-клиента
+// Инициализация
 // ============================================================================
 
-/** Центральная шина событий для связи слоёв приложения. */
 const events = new EventEmitter();
-
-/** Экземпляр базового класса Api для HTTP-запросов. */
 const api = new Api(API_URL);
-
-/** API-клиент для работы с эндпоинтами сервера Web-ларёк. */
 const webLarekApi = new WebLarekAPI(api);
 
 // ============================================================================
-// Создание моделей данных
+// Модели
 // ============================================================================
 
-/** Модель каталога товаров. */
 const productsModel = new ProductsModel(events);
-
-/** Модель корзины. */
 const basketModel = new BasketModel(events);
-
-/** Модель данных заказа (покупатель). */
 const orderModel = new OrderModel(events);
 
 // ============================================================================
-// Создание корневых компонентов представления
+// Корневые компоненты
 // ============================================================================
 
-/** Компонент главной страницы (галерея + счётчик). */
 const page = new Page(document.body, events);
-
-/** Компонент модального окна. */
 const modal = new Modal(ensureElement('#modal-container'), events);
 
-// Шаблоны, используемые для создания карточек и форм
+// Шаблоны
 const cardCatalogTemplate = ensureElement<HTMLTemplateElement>('#card-catalog');
 const cardPreviewTemplate = ensureElement<HTMLTemplateElement>('#card-preview');
 const cardBasketTemplate = ensureElement<HTMLTemplateElement>('#card-basket');
@@ -88,40 +67,44 @@ const contactsTemplate = ensureElement<HTMLTemplateElement>('#contacts');
 const successTemplate = ensureElement<HTMLTemplateElement>('#success');
 
 // ============================================================================
-// Тип для событий изменения полей форм
+// Типы событий
 // ============================================================================
 
-/** Событие изменения поля в формах оформления заказа. */
 type FormChangeEvent = { field: keyof IBuyer; value: string };
 
 // ============================================================================
-// Обработчики событий (презентер)
+// Состояние корзины и форм
+// ============================================================================
+
+let currentBasket: Basket | null = null;
+let isBasketOpen = false;
+let currentOrderForm: OrderForm | null = null;
+let currentContactsForm: ContactsForm | null = null;
+
+// ============================================================================
+// Обработчики событий
 // ============================================================================
 
 // ----------------------------------------------------------------------------
-// Загрузка товаров с сервера при старте приложения
+// Загрузка товаров
 // ----------------------------------------------------------------------------
 
 webLarekApi.getProducts()
-  .then(({ items }) => {
-    // Сохраняем полученный массив в модель – она сгенерирует событие products:changed
-    productsModel.setItems(items);
-  })
-  .catch(err => console.error('Ошибка загрузки товаров:', err));
+  .then(({ items }) => productsModel.setItems(items))
+  .catch(err => {
+    console.warn('Используются локальные данные:', err);
+    productsModel.setItems(apiProducts.items);
+  });
 
 // ----------------------------------------------------------------------------
-// Обновление галереи при изменении каталога
+// Отображение каталога
 // ----------------------------------------------------------------------------
 
-/**
- * При изменении списка товаров пересоздаём карточки каталога
- * и обновляем галерею на главной странице.
- */
 events.on('products:changed', () => {
   const items = productsModel.getItems();
   const cards = items.map(product => {
-    const cardContainer = cloneTemplate(cardCatalogTemplate);
-    const card = new CardCatalog(cardContainer, events);
+    const container = cloneTemplate(cardCatalogTemplate);
+    const card = new CardCatalog(container, events);
     card.id = product.id;
     card.title = product.title;
     card.image = CDN_URL + product.image;
@@ -133,102 +116,86 @@ events.on('products:changed', () => {
 });
 
 // ----------------------------------------------------------------------------
-// Выбор товара для просмотра (клик по карточке в каталоге)
+// Выбор товара (предпросмотр)
 // ----------------------------------------------------------------------------
 
-/**
- * При клике на карточку каталога находим товар по id
- * и сохраняем его как выбранный в модели.
- */
 events.on('card:select', (data: { id: string }) => {
   const product = productsModel.getItemById(data.id);
-  if (!product) return;
-  // Генерация события products:selected произойдёт внутри модели
-  productsModel.setSelectedProduct(product);
+  if (product) productsModel.setSelectedProduct(product);
 });
 
-// ----------------------------------------------------------------------------
-// Отображение предпросмотра товара в модальном окне
-// ----------------------------------------------------------------------------
-
-/**
- * После того как выбранный товар установлен, создаём карточку
- * предпросмотра и открываем модальное окно.
- */
 events.on('products:selected', () => {
   const product = productsModel.getSelectedProduct();
   if (!product) return;
 
-  const cardContainer = cloneTemplate(cardPreviewTemplate);
-  const cardPreview = new CardPreview(cardContainer, events);
+  const container = cloneTemplate(cardPreviewTemplate);
+  const card = new CardPreview(container, events);
+  card.id = product.id;
+  card.title = product.title;
+  card.image = CDN_URL + product.image;
+  card.category = product.category;
+  card.price = product.price;
+  card.description = product.description;
 
-  // Заполняем данные карточки
-  cardPreview.id = product.id;
-  cardPreview.title = product.title;
-  cardPreview.image = CDN_URL + product.image;
-  cardPreview.category = product.category;
-  cardPreview.price = product.price;
-  cardPreview.description = product.description;
-
-  // Определяем состояние кнопки
   const inBasket = basketModel.hasItem(product.id);
   const isAvailable = product.price !== null && product.price > 0;
-
-  cardPreview.buttonState = {
+  card.buttonState = {
     text: inBasket ? 'Удалить из корзины' : (isAvailable ? 'Купить' : 'Недоступно'),
     disabled: !isAvailable,
   };
-
-  modal.open(cardPreview.render());
+  modal.open(card.render());
 });
 
 // ----------------------------------------------------------------------------
-// Обработка действий с карточкой в предпросмотре (добавить/удалить)
+// Действия с корзиной (добавление/удаление)
 // ----------------------------------------------------------------------------
 
-/**
- * При нажатии на кнопку в предпросмотре добавляем или удаляем товар из корзины.
- * После действия модальное окно закрывается.
- */
 events.on('card:action', (data: { id: string; action: 'add' | 'remove' }) => {
   const product = productsModel.getItemById(data.id);
   if (!product) return;
-
-  if (data.action === 'add') {
-    basketModel.addItem(product);
-  } else {
-    basketModel.removeItem(product.id);
-  }
+  data.action === 'add' ? basketModel.addItem(product) : basketModel.removeItem(product.id);
   modal.close();
 });
 
 // ----------------------------------------------------------------------------
-// Обновление счётчика корзины
+// Обновление счётчика и содержимого корзины
 // ----------------------------------------------------------------------------
 
-/**
- * При любом изменении состава корзины обновляем счётчик на иконке.
- */
 events.on('basket:changed', () => {
   page.setCounter(basketModel.getCount());
+  if (isBasketOpen && currentBasket) {
+    const items = basketModel.getItems();
+    const total = basketModel.getTotalPrice();
+    const cards = items.map((product, index) => {
+      const container = cloneTemplate(cardBasketTemplate);
+      const card = new CardBasket(container, events);
+      card.id = product.id;
+      card.title = product.title;
+      card.price = product.price;
+      card.index = index + 1;
+      return card.render();
+    });
+    currentBasket.setItems(cards);
+    currentBasket.setTotal(total);
+  }
 });
 
 // ----------------------------------------------------------------------------
-// Открытие модального окна с содержимым корзины
+// Открытие корзины
 // ----------------------------------------------------------------------------
 
-/**
- * При запросе открытия корзины собираем список товаров,
- * создаём для каждого карточку и отображаем итоговую сумму.
- */
 events.on('basket:open', () => {
+  if (isBasketOpen) {
+    events.emit('basket:changed');
+    return;
+  }
+
   const items = basketModel.getItems();
   const total = basketModel.getTotalPrice();
+  const container = cloneTemplate(basketTemplate);
+  const basket = new Basket(container, events);
+  currentBasket = basket;
 
-  const basketContainer = cloneTemplate(basketTemplate);
-  const basket = new Basket(basketContainer, events);
-
-  // Создаём карточки для каждого товара
   const cards = items.map((product, index) => {
     const cardContainer = cloneTemplate(cardBasketTemplate);
     const card = new CardBasket(cardContainer, events);
@@ -242,126 +209,105 @@ events.on('basket:open', () => {
   basket.setItems(cards);
   basket.setTotal(total);
   modal.open(basket.render());
+  isBasketOpen = true;
+});
+
+events.on('modal:close', () => {
+  isBasketOpen = false;
+  currentBasket = null;
+  currentOrderForm = null;
+  currentContactsForm = null;
 });
 
 // ----------------------------------------------------------------------------
-// Удаление товара из корзины (из списка корзины)
+// Удаление товара из корзины
 // ----------------------------------------------------------------------------
 
-/**
- * При клике на кнопку удаления в карточке корзины удаляем товар из модели
- * и переоткрываем корзину для обновления списка.
- */
 events.on('basket:remove', (data: { id: string }) => {
   basketModel.removeItem(data.id);
-  events.emit('basket:open'); // обновляем отображение корзины
 });
 
 // ----------------------------------------------------------------------------
-// Начало оформления заказа – открываем первую форму (способ оплаты + адрес)
+// Оформление заказа – первый шаг (способ оплаты + адрес)
 // ----------------------------------------------------------------------------
 
-/**
- * При нажатии «Оформить» в корзине открываем первую форму заказа.
- * Устанавливаем начальное состояние кнопки «Далее» на основе валидации.
- */
 events.on('basket:order', () => {
-  const orderContainer = cloneTemplate(orderTemplate);
-  const orderForm = new OrderForm(orderContainer, events);
+  modal.close(); // закрываем корзину
+  const container = cloneTemplate(orderTemplate);
+  const orderForm = new OrderForm(container, events);
+  currentOrderForm = orderForm;
 
   const errors = orderModel.validate();
-  orderForm.setSubmitDisabled(Object.keys(errors).length > 0);
-
+  // На первом шаге проверяем только address и payment
+  const hasStep1Errors = !!(errors.address || errors.payment);
+  orderForm.setSubmitDisabled(hasStep1Errors);
   modal.open(orderForm.render());
 });
 
 // ----------------------------------------------------------------------------
-// Изменение полей первой формы (способ оплаты и адрес)
+// Изменение полей первой формы
 // ----------------------------------------------------------------------------
 
-/**
- * При изменении любого поля в форме заказа обновляем модель
- * и пересчитываем состояние кнопки «Далее» с отображением ошибок.
- */
 events.on('order:change', (data: FormChangeEvent) => {
   orderModel.setField(data.field, data.value);
-
-  const errors = orderModel.validate();
-  const orderFormElement = modal['_content'].querySelector('.form');
-  if (orderFormElement) {
-    const form = new OrderForm(orderFormElement as HTMLElement, events);
-    const errorMessages = Object.values(errors);
-    form.setErrors(errorMessages);
-    form.setSubmitDisabled(errorMessages.length > 0);
+  if (currentOrderForm) {
+    const errors = orderModel.validate();
+    // Для первого шага проверяем только address и payment
+    const hasStep1Errors = !!(errors.address || errors.payment);
+    const errorMessages = Object.values(errors).filter(e => e);
+    currentOrderForm.setErrors(errorMessages);
+    currentOrderForm.setSubmitDisabled(hasStep1Errors);
   }
 });
 
 // ----------------------------------------------------------------------------
-// Отправка первой формы – переход ко второй форме (контакты)
+// Отправка первой формы → переход ко второй
 // ----------------------------------------------------------------------------
 
-/**
- * При отправке первой формы проверяем, что ошибок нет,
- * и открываем вторую форму (email и телефон).
- */
 events.on('order:submit', () => {
   const errors = orderModel.validate();
   if (errors.address || errors.payment) {
-    return; // не переходим, если есть ошибки
+    return;
   }
 
-  const contactsContainer = cloneTemplate(contactsTemplate);
-  const contactsForm = new ContactsForm(contactsContainer, events);
+  // Открываем вторую форму
+  const container = cloneTemplate(contactsTemplate);
+  const contactsForm = new ContactsForm(container, events);
+  currentContactsForm = contactsForm;
 
-  // Начальное состояние кнопки «Оплатить»
   const contactsErrors = orderModel.validate();
-  contactsForm.setSubmitDisabled(!!contactsErrors.email || !!contactsErrors.phone);
-
+  const hasStep2Errors = !!(contactsErrors.email || contactsErrors.phone);
+  contactsForm.setSubmitDisabled(hasStep2Errors);
   modal.open(contactsForm.render());
 });
 
 // ----------------------------------------------------------------------------
-// Изменение полей второй формы (email и телефон)
+// Изменение полей второй формы
 // ----------------------------------------------------------------------------
 
-/**
- * При изменении полей контактов обновляем модель и валидацию,
- * управляя активностью кнопки «Оплатить».
- */
 events.on('contacts:change', (data: FormChangeEvent) => {
   orderModel.setField(data.field, data.value);
-
-  const errors = orderModel.validate();
-  const contactsFormElement = modal['_content'].querySelector('.form');
-  if (contactsFormElement) {
-    const form = new ContactsForm(contactsFormElement as HTMLElement, events);
+  if (currentContactsForm) {
+    const errors = orderModel.validate();
+    const hasStep2Errors = !!(errors.email || errors.phone);
     const errorMessages = Object.values(errors).filter(e => e);
-    form.setErrors(errorMessages);
-    const hasErrors = Object.keys(errors).some(k => k === 'email' || k === 'phone');
-    form.setSubmitDisabled(hasErrors);
+    currentContactsForm.setErrors(errorMessages);
+    currentContactsForm.setSubmitDisabled(hasStep2Errors);
   }
 });
 
 // ----------------------------------------------------------------------------
-// Отправка второй формы – отправка заказа на сервер
+// Отправка второй формы → отправка заказа на сервер
 // ----------------------------------------------------------------------------
 
-/**
- * При отправке второй формы собираем все данные заказа,
- * отправляем их на сервер и в случае успеха очищаем корзину,
- * сбрасываем данные заказа и показываем сообщение об успешной оплате.
- */
 events.on('contacts:submit', () => {
   const orderData = orderModel.getData();
-
-  // Проверяем полноту данных (защита от некорректного состояния)
   if (!orderData.payment || !orderData.address || !orderData.email || !orderData.phone) {
     return;
   }
 
   const items = basketModel.getItems().map(item => item.id);
   const total = basketModel.getTotalPrice();
-
   const order = {
     payment: orderData.payment,
     address: orderData.address,
@@ -373,29 +319,20 @@ events.on('contacts:submit', () => {
 
   webLarekApi.postOrder(order)
     .then(result => {
-      // Очищаем корзину и данные заказа
       basketModel.clear();
       orderModel.clear();
-
-      // Показываем сообщение об успехе
-      const successContainer = cloneTemplate(successTemplate);
-      const success = new Success(successContainer, events);
+      const container = cloneTemplate(successTemplate);
+      const success = new Success(container, events);
       success.total = result.total;
       modal.open(success.render());
     })
-    .catch(err => {
-      console.error('Ошибка оформления заказа:', err);
-      // Здесь можно добавить отображение ошибки пользователю, если требуется
-    });
+    .catch(err => console.error('Ошибка оформления заказа:', err));
 });
 
 // ----------------------------------------------------------------------------
-// Закрытие сообщения об успехе
+// Закрытие успешного сообщения
 // ----------------------------------------------------------------------------
 
-/**
- * При клике на кнопку «За новыми покупками!» закрываем модальное окно.
- */
 events.on('success:close', () => {
   modal.close();
 });
@@ -404,5 +341,4 @@ events.on('success:close', () => {
 // Запуск приложения
 // ============================================================================
 
-// Все инициализационные действия уже выполнены через обработчики событий.
-console.log('Web-ларёк успешно запущен!');
+console.log('Web-ларёк запущен!');
