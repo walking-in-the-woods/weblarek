@@ -17,13 +17,18 @@ export class CardBasket extends Card<IProduct> {
     this._index = container.querySelector('.basket__item-index')!;
     this._deleteButton = container.querySelector('.basket__item-delete')!;
 
+    // При клике на кнопку удаления генерируем событие
     this._deleteButton.addEventListener('click', () => {
       this.events.emit('basket:remove', { id: this._id });
     });
   }
 
+  // Сеттеры для данных карточки в корзине
   set id(value: string) { this._id = value; }
   set title(value: string) { this._title.textContent = value; }
   set price(value: number | null) { this.setPrice(value); }
   set index(value: number) { this._index.textContent = String(value); }
+
+  // Изображение в корзине не отображается, но сеттер оставлен на случай расширения
+  set image(value: string) { this.setCardImage(value); } // исправлено (на всякий случай)
 }

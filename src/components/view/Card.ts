@@ -15,7 +15,7 @@ export abstract class Card<T> extends Component<T> {
 
   constructor(container: HTMLElement) {
     super(container);
-    // Находим обязательные элементы в разметке карточки
+    // Находим элементы в DOM
     this._title = container.querySelector('.card__title')!;
     this._price = container.querySelector('.card__price')!;
     this._category = container.querySelector('.card__category') ?? undefined;
@@ -23,8 +23,9 @@ export abstract class Card<T> extends Component<T> {
   }
 
   /**
-   * Устанавливает категорию товара и применяет соответствующий CSS-класс из categoryMap.
-   * @param category - строка категории
+   * Устанавливает категорию товара и применяет соответствующий CSS-класс.
+   * Используется объект categoryMap из констант.
+   * @param category - строка категории (например, "софт-скил")
    */
   protected setCategory(category: string) {
     if (this._category) {
@@ -35,11 +36,11 @@ export abstract class Card<T> extends Component<T> {
   }
 
   /**
-   * Устанавливает изображение карточки.
-   * @param src - путь к изображению
-   * @param alt - альтернативный текст
+   * Устанавливает изображение карточки, используя сохранённый DOM-элемент.
+   * @param src - путь к изображению (полный URL или относительный)
+   * @param alt - альтернативный текст (опционально)
    */
-  protected setImage(src: string, alt?: string) {
+  protected setCardImage(src: string, alt?: string) {
     if (this._image) {
       this._image.src = src;
       if (alt) this._image.alt = alt;
@@ -47,7 +48,8 @@ export abstract class Card<T> extends Component<T> {
   }
 
   /**
-   * Форматирует цену: если цена null, выводит "Бесценно", иначе добавляет "синапсов".
+   * Форматирует цену для отображения.
+   * Если цена null, выводит "Бесценно", иначе добавляет "синапсов".
    * @param price - цена или null
    */
   protected setPrice(price: number | null) {
