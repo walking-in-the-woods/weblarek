@@ -1,18 +1,16 @@
 import { Component } from '../base/Component';
-import { IEvents } from '../base/Events';
 
 /**
  * Компонент корзины.
  * Отображает список товаров, общую стоимость и кнопку оформления заказа.
- * Кнопка оформления деактивируется, если корзина пуста.
- * Генерирует событие 'basket:order' при клике на кнопку "Оформить".
+ * Управление состоянием кнопки и списком осуществляется через сеттеры.
  */
 export class Basket extends Component<{ items: HTMLElement[]; total: number }> {
   private _list: HTMLElement;
   private _total: HTMLElement;
   private _button: HTMLButtonElement;
 
-  constructor(container: HTMLElement, protected events: IEvents) {
+  constructor(container: HTMLElement, private _onOrder: () => void) {
     super(container);
     this._list = container.querySelector('.basket__list')!;
     this._total = container.querySelector('.basket__price')!;
@@ -20,36 +18,29 @@ export class Basket extends Component<{ items: HTMLElement[]; total: number }> {
 
     this._button.addEventListener('click', () => {
       if (!this._button.disabled) {
-        this.events.emit('basket:order');
+        this._onOrder();
       }
     });
   }
 
-  /** Устанавливает список карточек в корзине. */
-  setItems(items: HTMLElement[]) {
-    this._list.replaceChildren(...items);
-  }
-
-  /** Обновляет отображение общей стоимости. */
-  setTotal(total: number) {
-    this._total.textContent = `${total} синапсов`;
-  }
-
-  /** Включает/выключает кнопку оформления. */
-  setDisabled(disabled: boolean) {
-    this._button.disabled = disabled;
+  /**
+   * Устанавливает список карточек в корзине.
+   */
+  set items(value: HTMLElement[]) {
+    this._list.replaceChildren(...value);
   }
 
   /**
-   * Рендерит корзину с переданными элементами и итоговой суммой.
-   * Автоматически управляет доступностью кнопки.
+   * Устанавливает общую стоимость.
    */
+  set total(value: number) {
+    this._total.textContent = `${value} синапсов`;
+    this._button.disabled = value === 0;
+  }
+
   render(data?: Partial<{ items: HTMLElement[]; total: number }>): HTMLElement {
-    if (data?.items) this.setItems(data.items);
-    if (data?.total !== undefined) {
-      this.setTotal(data.total);
-      this.setDisabled(data.total === 0);
-    }
+    if (data?.items) this.items = data.items;
+    if (data?.total !== undefined) this.total = data.total;
     return this.container;
   }
 }

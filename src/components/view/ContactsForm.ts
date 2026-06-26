@@ -1,29 +1,35 @@
 import { Form } from './Form';
-import { IEvents } from '../base/Events';
 
 /**
  * Вторая форма оформления заказа (email и телефон).
- * Генерирует события 'contacts:change' и 'contacts:submit'.
+ * Содержит сеттеры для полей и ошибок.
+ * При изменении полей вызывает колбэк, переданный в конструктор.
  */
 export class ContactsForm extends Form<{ email: string; phone: string }> {
   private _emailInput: HTMLInputElement;
   private _phoneInput: HTMLInputElement;
 
-  constructor(container: HTMLElement, events: IEvents) {
-    super(container, events);
+  constructor(container: HTMLElement, onInputChange: (field: string, value: string) => void, private _onSubmitCallback: () => void) {
+    super(container, onInputChange);
     this._emailInput = container.querySelector('[name="email"]')!;
     this._phoneInput = container.querySelector('[name="phone"]')!;
   }
 
-  protected getFormName(): string {
-    return 'contacts';
+  protected _onSubmit(): void {
+    this._onSubmitCallback();
   }
 
-  /** Генерирует событие 'contacts:change' при изменении любого поля. */
-  protected onInputChange(field: string, value: string): void {
-    this.events.emit('contacts:change', { field, value });
+  /**
+   * Устанавливает значение поля email.
+   */
+  set email(value: string) {
+    this._emailInput.value = value;
   }
 
-  get email(): string { return this._emailInput.value; }
-  get phone(): string { return this._phoneInput.value; }
+  /**
+   * Устанавливает значение поля телефона.
+   */
+  set phone(value: string) {
+    this._phoneInput.value = value;
+  }
 }

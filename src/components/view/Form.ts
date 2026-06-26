@@ -1,50 +1,47 @@
 import { Component } from '../base/Component';
-import { IEvents } from '../base/Events';
 
 /**
  * Абстрактный базовый класс для форм.
  * Управляет отправкой формы, обработкой ввода и отображением ошибок.
- * Генерирует события при изменении полей и при отправке формы.
- * @template T - тип данных формы
+ * Предоставляет методы для установки ошибок и состояния кнопки.
  */
 export abstract class Form<T> extends Component<T> {
   protected _form: HTMLFormElement;
   protected _errors: HTMLElement;
   protected _submitButton: HTMLButtonElement;
 
-  constructor(container: HTMLElement, protected events: IEvents) {
+  constructor(container: HTMLElement, protected _onInputChange: (field: string, value: string) => void) {
     super(container);
     this._form = container as HTMLFormElement;
     this._errors = container.querySelector('.form__errors')!;
     this._submitButton = container.querySelector('.button[type="submit"]')!;
 
-    // Отслеживаем ввод в любом поле
     this._form.addEventListener('input', (e) => {
       const target = e.target as HTMLInputElement;
-      this.onInputChange(target.name, target.value);
+      this._onInputChange(target.name, target.value);
     });
 
-    // Отслеживаем отправку формы
     this._form.addEventListener('submit', (e) => {
       e.preventDefault();
-      this.events.emit(`${this.getFormName()}:submit`);
+      this._onSubmit();
     });
   }
 
-  /** Должен возвращать имя формы для генерации событий (например, 'order' или 'contacts'). */
-  protected abstract getFormName(): string;
+  /** Должен быть переопределён в наследниках для отправки формы. */
+  protected abstract _onSubmit(): void;
 
-  /** Обработчик изменения поля. Генерирует событие с именем формы и данными поля. */
-  protected abstract onInputChange(field: string, value: string): void;
-
-  /** Устанавливает текст ошибок (через точку с запятой). */
-  setErrors(errors: string[]) {
-    this._errors.textContent = errors.join('; ');
+  /**
+   * Устанавливает текст ошибок (через точку с запятой).
+   */
+  set errors(value: string[]) {
+    this._errors.textContent = value.join('; ');
   }
 
-  /** Включает/выключает кнопку отправки. */
-  setSubmitDisabled(disabled: boolean) {
-    this._submitButton.disabled = disabled;
+  /**
+   * Включает/выключает кнопку отправки.
+   */
+  set submitDisabled(value: boolean) {
+    this._submitButton.disabled = value;
   }
 
   render(data?: Partial<T>): HTMLElement {

@@ -1,26 +1,24 @@
-import { Card } from './Card';
+import { CardWithImage } from './CardWithImage';
 import { IProduct } from '../../types';
-import { IEvents } from '../base/Events';
 
 /**
  * Карточка товара для каталога.
- * При клике на карточку генерирует событие 'card:select' с id товара.
+ * При клике на карточку вызывает переданный колбэк.
  */
-export class CardCatalog extends Card<IProduct> {
-  private _id: string = '';
-
-  constructor(container: HTMLElement, protected events: IEvents) {
+export class CardCatalog extends CardWithImage<IProduct> {
+  constructor(container: HTMLElement, private _onClick: (id: string) => void) {
     super(container);
-    // При клике на всю карточку генерируем событие выбора
     container.addEventListener('click', () => {
-      this.events.emit('card:select', { id: this._id });
+      // id передаётся через data-атрибут, но мы не храним его в классе
+      const id = container.dataset.id;
+      if (id) this._onClick(id);
     });
   }
 
-  // Сеттеры для заполнения данных карточки
-  set id(value: string) { this._id = value; }
-  set title(value: string) { this._title.textContent = value; }
-  set image(value: string) { this.setCardImage(value); } // исправлено
-  set category(value: string) { this.setCategory(value); }
-  set price(value: number | null) { this.setPrice(value); }
+  /**
+   * Устанавливает ID товара в data-атрибут контейнера для использования в колбэке.
+   */
+  set id(value: string) {
+    this.container.dataset.id = value;
+  }
 }
