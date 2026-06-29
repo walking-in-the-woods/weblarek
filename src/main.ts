@@ -3,7 +3,7 @@
  * Реализует слой презентера: связывает модели данных, компоненты представления
  * и API через брокер событий EventEmitter.
  *
- * Все представления, кроме карточек, создаются однократно.
+ * Все представления, кроме карточек галереи и корзины, создаются однократно.
  * Обновление представлений происходит только при событиях изменения моделей.
  */
 
@@ -93,6 +93,16 @@ const cardPreviewTemplate = ensureElement<HTMLTemplateElement>('#card-preview');
 const cardBasketTemplate = ensureElement<HTMLTemplateElement>('#card-basket');
 
 // ============================================================================
+// Представление предпросмотра (создаётся один раз)
+// ============================================================================
+
+const previewContainer = cloneTemplate(cardPreviewTemplate);
+const cardPreview = new CardPreview(previewContainer, () => {
+  // Генерируем событие без данных – все данные берутся из модели
+  events.emit('card:action');
+});
+
+// ============================================================================
 // Обработчики событий (презентер)
 // ============================================================================
 
@@ -115,10 +125,10 @@ events.on('products:changed', () => {
   const items = productsModel.getItems();
   const cards = items.map(product => {
     const container = cloneTemplate(cardCatalogTemplate);
-    const card = new CardCatalog(container, (id: string) => {
-      events.emit('card:select', { id });
+    // Передаём id через замыкание
+    const card = new CardCatalog(container, () => {
+      events.emit('card:select', { id: product.id });
     });
-    card.id = product.id;
     card.title = product.title;
     card.image = CDN_URL + product.image;
     card.category = product.category;
@@ -129,7 +139,7 @@ events.on('products:changed', () => {
 });
 
 // ----------------------------------------------------------------------------
-// Выбор товара – открытие предпросмотра
+// Выбор товара – сохраняем в модели и открываем предпросмотр
 // ----------------------------------------------------------------------------
 
 events.on('card:select', (data: { id: string }) => {
@@ -141,31 +151,38 @@ events.on('products:selected', () => {
   const product = productsModel.getSelectedProduct();
   if (!product) return;
 
-  const container = cloneTemplate(cardPreviewTemplate);
-  const card = new CardPreview(container, () => {
-    const inBasket = basketModel.hasItem(product.id);
-    if (inBasket) {
-      basketModel.removeItem(product.id);
-    } else {
-      basketModel.addItem(product);
-    }
-    modal.close();
-  });
-
-  card.title = product.title;
-  card.image = CDN_URL + product.image;
-  card.category = product.category;
-  card.price = product.price;
-  card.description = product.description;
+  // Обновляем существующее представление CardPreview
+  cardPreview.title = product.title;
+  cardPreview.image = CDN_URL + product.image;
+  cardPreview.category = product.category;
+  cardPreview.price = product.price;
+  cardPreview.description = product.description;
 
   const inBasket = basketModel.hasItem(product.id);
   const isAvailable = product.price !== null && product.price > 0;
-  card.buttonState = {
+  cardPreview.buttonState = {
     text: inBasket ? 'Удалить из корзины' : (isAvailable ? 'Купить' : 'Недоступно'),
     disabled: !isAvailable,
   };
 
-  modal.open(card.render());
+  modal.open(cardPreview.render());
+});
+
+// ----------------------------------------------------------------------------
+// Обработка действия с карточкой в предпросмотре
+// ----------------------------------------------------------------------------
+
+events.on('card:action', () => {
+  const product = productsModel.getSelectedProduct();
+  if (!product) return;
+
+  const inBasket = basketModel.hasItem(product.id);
+  if (inBasket) {
+    basketModel.removeItem(product.id);
+  } else {
+    basketModel.addItem(product);
+  }
+  modal.close();
 });
 
 // ----------------------------------------------------------------------------
@@ -180,6 +197,7 @@ events.on('basket:changed', () => {
 
   const cards = items.map((product, index) => {
     const container = cloneTemplate(cardBasketTemplate);
+    // Передаём id через замыкание
     const card = new CardBasket(container, () => {
       basketModel.removeItem(product.id);
     });
